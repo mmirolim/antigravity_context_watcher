@@ -10,6 +10,7 @@ const { buildDiagnostics } = require("./antigravityState");
 const { getBrainRoot } = require("./antigravityLocator");
 const { probeRuntimeTraces } = require("./runtimeTraceProbe");
 const { analyzeLiveUsage } = require("./liveUsageAnalysis");
+const { resolveAutoPinBrainPath } = require("./sessionPinning");
 
 function formatCompactCount(value) {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -152,6 +153,8 @@ function buildBreakdownMarkdown(snapshot) {
     lines.push(`- Cached content tokens: ${liveUsage.cachedContentTokenCount}`);
     lines.push(`- Cache creation input tokens: ${liveUsage.cacheCreationInputTokens}`);
     lines.push(`- Tool use prompt tokens: ${liveUsage.toolUsePromptTokenCount}`);
+    lines.push(`- Approximate new tokens processed this turn: ${liveUsageAnalysis.approximateNewTokensThisTurn}`);
+    lines.push(`- Prior context reused from cache: ${liveUsageAnalysis.cachedInputTokens}`);
     lines.push(`- Decoded recent live-step tokens: ${liveUsageAnalysis.decodedRecentStepTokens}`);
     lines.push(`- Retained tokens not explained by decoded live steps: ${liveUsageAnalysis.unexplainedRetainedTokens}`);
     lines.push(`- Decoded live-step coverage: ${formatPercent(liveUsageAnalysis.decodedCoverageFraction)}`);
@@ -302,6 +305,8 @@ function buildDiagnosticsMarkdown(snapshot, diagnostics, runtimeTraceProbe) {
     lines.push(`- Cached content tokens: ${liveUsage.cachedContentTokenCount}`);
     lines.push(`- Cache creation input tokens: ${liveUsage.cacheCreationInputTokens}`);
     lines.push(`- Tool use prompt tokens: ${liveUsage.toolUsePromptTokenCount}`);
+    lines.push(`- Approximate new tokens processed this turn: ${liveUsageAnalysis.approximateNewTokensThisTurn}`);
+    lines.push(`- Prior context reused from cache: ${liveUsageAnalysis.cachedInputTokens}`);
     lines.push(`- Decoded recent live-step tokens: ${liveUsageAnalysis.decodedRecentStepTokens}`);
     lines.push(`- Retained tokens not explained by decoded live steps: ${liveUsageAnalysis.unexplainedRetainedTokens}`);
     lines.push(`- Decoded live-step coverage: ${formatPercent(liveUsageAnalysis.decodedCoverageFraction)}`);
@@ -585,6 +590,7 @@ function updateStatusBar(statusBarItem, tracker) {
       `Latest gen input: ${liveUsage.effectiveInputTokens}`,
       `Latest gen output: ${liveUsage.outputTokens}`,
       `Cache read: ${liveUsage.cacheReadTokens}`,
+      `Approx new this turn: ${liveUsageAnalysis.approximateNewTokensThisTurn}`,
       `Decoded live steps: ${liveUsageAnalysis.decodedRecentStepTokens}`,
       `Not explained by decoded steps: ${liveUsageAnalysis.unexplainedRetainedTokens}`,
       liveUsageAnalysis.hiddenContextLikely
@@ -618,6 +624,40 @@ async function activate(context) {
   context.subscriptions.push(statusBarItem);
 
   const tracker = new ContextTracker(vscode);
+  let autoPinPromise = null;
+
+  const maybeAutoPinVisibleSession = async () => {
+    const config = vscode.workspace.getConfiguration("contextWatcher");
+    const nextBrainPath = resolveAutoPinBrainPath(
+      tracker.getSnapshot(),
+      config.get("activeBrainPath", ""),
+      config.get("autoPinVisibleSession", true)
+    );
+    if (!nextBrainPath) {
+      return false;
+    }
+    await config.update("activeBrainPath", nextBrainPath, vscode.ConfigurationTarget.Global);
+    return true;
+  };
+
+  const syncAutoPinVisibleSession = async (detailLevel = "light") => {
+    if (autoPinPromise) {
+      return autoPinPromise;
+    }
+
+    autoPinPromise = (async () => {
+      const autoPinned = await maybeAutoPinVisibleSession();
+      if (autoPinned) {
+        await tracker.refresh({ detailLevel });
+        updateStatusBar(statusBarItem, tracker);
+      }
+      return autoPinned;
+    })().finally(() => {
+      autoPinPromise = null;
+    });
+
+    return autoPinPromise;
+  };
 
   context.subscriptions.push({
     dispose() {
@@ -627,6 +667,9 @@ async function activate(context) {
 
   tracker.on("changed", () => {
     updateStatusBar(statusBarItem, tracker);
+    void syncAutoPinVisibleSession("light").catch((error) => {
+      console.error("[contextWatcher] auto pin failed", error);
+    });
   });
 
   context.subscriptions.push(
@@ -648,8 +691,9 @@ async function activate(context) {
       }
       timeout = setTimeout(() => {
         timeout = null;
-        void tracker.refresh().then(() => {
+        void tracker.refresh({ detailLevel: "light" }).then(() => {
           updateStatusBar(statusBarItem, tracker);
+          return syncAutoPinVisibleSession("light");
         }).catch((error) => {
           console.error("[contextWatcher] refresh failed", error);
         });
@@ -674,8 +718,9 @@ async function activate(context) {
     }
   }
 
-  const refreshTracker = async (showMessage) => {
-    await tracker.refresh();
+  const refreshTracker = async (showMessage, detailLevel = "full") => {
+    await tracker.refresh({ detailLevel });
+    await syncAutoPinVisibleSession("light");
     updateStatusBar(statusBarItem, tracker);
     if (showMessage) {
       await vscode.window.setStatusBarMessage("Context Watcher refreshed.", 1500);
@@ -861,10 +906,10 @@ async function activate(context) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("contextWatcher.refresh", async () => {
-      await refreshTracker(true);
+      await refreshTracker(true, "full");
     }),
     vscode.commands.registerCommand("contextWatcher.showBreakdown", async () => {
-      await refreshTracker(false);
+      await refreshTracker(false, "full");
       await openMarkdownDocument(buildBreakdownMarkdown(tracker.getSnapshot()));
     }),
     vscode.commands.registerCommand("contextWatcher.showActions", showActions),
@@ -881,7 +926,7 @@ async function activate(context) {
       await clearPinnedSessionAndRefresh();
     }),
     vscode.commands.registerCommand("contextWatcher.copyCompactPrompt", async () => {
-      await refreshTracker(false);
+      await refreshTracker(false, "full");
       const snapshot = tracker.getSnapshot();
       const config = vscode.workspace.getConfiguration("contextWatcher");
       const prompt = buildSummaryPrompt(snapshot, config.get("compactorTokenLimit", 24000));
@@ -893,7 +938,7 @@ async function activate(context) {
       );
     }),
     vscode.commands.registerCommand("contextWatcher.copySummarizeCurrentChatPrompt", async () => {
-      await refreshTracker(false);
+      await refreshTracker(false, "full");
       const snapshot = tracker.getSnapshot();
       const config = vscode.workspace.getConfiguration("contextWatcher");
       const prompt = buildSummarizeCurrentChatPrompt(snapshot, config.get("compactorTokenLimit", 24000));
@@ -903,7 +948,7 @@ async function activate(context) {
       );
     }),
     vscode.commands.registerCommand("contextWatcher.showDiagnostics", async () => {
-      await refreshTracker(false);
+      await refreshTracker(false, "full");
       const snapshot = tracker.getSnapshot();
       const diagnostics = buildDiagnostics(
         tracker.getWorkspaceFolders(),
@@ -951,9 +996,9 @@ async function activate(context) {
     })
   );
 
-  await refreshTracker(false);
+  await refreshTracker(false, "full");
   await ensureModelSelected(tracker);
-  await refreshTracker(false);
+  await refreshTracker(false, "full");
   tracker.start();
   updateStatusBar(statusBarItem, tracker);
 }

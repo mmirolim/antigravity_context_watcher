@@ -4,27 +4,11 @@ const path = require("path");
 const { promisify } = require("util");
 const { exec } = require("child_process");
 const { countTokens } = require("./tokenizer");
+const { toPositiveInteger, parseTimestamp } = require("./utils");
 
 const execAsync = promisify(exec);
 
-function toPositiveInteger(value) {
-  if (value == null || value === "") {
-    return 0;
-  }
-  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return 0;
-  }
-  return parsed;
-}
 
-function parseTimestamp(value) {
-  if (!value) {
-    return 0;
-  }
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 function normalizeTitle(value) {
   if (!value || typeof value !== "string") {
@@ -394,6 +378,15 @@ function extractRecentTrajectorySteps(trajectory, maxSteps = 10) {
   return entries.slice(-Math.max(1, maxSteps));
 }
 
+/**
+ * Provider-heuristic: this function infers effective input/output/retained
+ * token counts from heterogeneous provider usage payloads. The branching on
+ * promptTokenCount is based on observed Gemini-style responses where that
+ * field already includes cache and tool-use sub-components. If a future
+ * provider returns both promptTokenCount AND non-overlapping tool/cache
+ * subfields, the totals may undercount. Treat the results as best-effort
+ * estimates, not billing-grade numbers.
+ */
 function computeUsageFromGeneratorUsage(usage) {
   const promptTokenCount = toPositiveInteger(usage?.promptTokenCount);
   const inputTokens = toPositiveInteger(usage?.inputTokens);
@@ -403,10 +396,14 @@ function computeUsageFromGeneratorUsage(usage) {
   const toolUsePromptTokenCount = toPositiveInteger(usage?.toolUsePromptTokenCount);
 
   const baseInputTokens = promptTokenCount || inputTokens;
+  // Heuristic: when promptTokenCount is present (Gemini-style), it is assumed
+  // to already include cache and tool-use tokens as sub-components. Adding them
+  // again would double-count. When absent, we sum the sub-fields explicitly.
   const additionalCachedTokens = promptTokenCount
     ? 0
     : cacheReadTokens + cachedContentTokenCount + cacheCreationInputTokens;
-  const effectiveInputTokens = baseInputTokens + additionalCachedTokens + toolUsePromptTokenCount;
+  const additionalToolTokens = promptTokenCount ? 0 : toolUsePromptTokenCount;
+  const effectiveInputTokens = baseInputTokens + additionalCachedTokens + additionalToolTokens;
 
   const outputTokens = toPositiveInteger(usage?.outputTokens)
     || toPositiveInteger(usage?.responseOutputTokens)
@@ -622,7 +619,8 @@ class AntigravitySdkBridge {
     return bridge;
   }
 
-  async refresh(workspaceFolders, preferredCascadeId) {
+  async refresh(workspaceFolders, preferredCascadeId, options = {}) {
+    const detailLevel = options.detailLevel === "light" ? "light" : "full";
     const bridge = await this.ensureReady(workspaceFolders);
     if (!bridge) {
       return {
@@ -668,11 +666,17 @@ class AntigravitySdkBridge {
 
     let trajectory = null;
     let generatorMetadata = [];
-    if (cascadeId) {
+    if (cascadeId && detailLevel === "full") {
+      // NOTE: LoadTrajectory may have server-side effects (e.g. loading cached
+      // data into memory). It is called best-effort before the read-only Get*
+      // RPCs because some builds require it to populate the trajectory. If it is
+      // confirmed unnecessary, remove this call to strengthen the read-only
+      // guarantee. See review: "from the name alone it looks stateful."
       try {
         await bridge.rawRPC("LoadTrajectory", { cascadeId });
       } catch (_error) {
-        // Best-effort refresh. Some builds may not implement this call.
+        // Best-effort: some builds may not implement this call, and
+        // GetCascadeTrajectory may work without it.
       }
       const trajectoryResponse = await bridge.rawRPC("GetCascadeTrajectory", { cascadeId });
       const generatorMetadataResponse = await bridge.rawRPC("GetCascadeTrajectoryGeneratorMetadata", { cascadeId });
@@ -686,6 +690,7 @@ class AntigravitySdkBridge {
 
     return {
       ready: true,
+      detailLevel,
       connection: this.connection,
       userStatus,
       modelOptions,

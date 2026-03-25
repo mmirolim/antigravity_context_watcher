@@ -33,9 +33,11 @@ test("computeUsageFromGeneratorUsage prefers promptTokenCount when available", (
     responseOutputTokens: "300"
   });
 
-  assert.equal(usage.effectiveInputTokens, 8120);
+  // When promptTokenCount is present (Gemini-style), it already includes tool-use
+  // tokens. effectiveInputTokens should be 8000 (not 8000+120=8120).
+  assert.equal(usage.effectiveInputTokens, 8000);
   assert.equal(usage.outputTokens, 300);
-  assert.equal(usage.retainedTokens, 8420);
+  assert.equal(usage.retainedTokens, 8300);
 });
 
 test("selectLatestGeneratorMetadata returns the newest generation and maps the live model label", () => {

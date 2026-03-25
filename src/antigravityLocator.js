@@ -3,6 +3,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { existsDir } = require("./utils");
 const {
   buildWorkspaceSessionCandidates,
   getConversationFileInfo,
@@ -12,13 +13,7 @@ const {
 const TRACKED_FILENAMES = new Set(["output.txt"]);
 const CONVERSATION_OVERRIDE_DELTA_MS = 15000;
 
-function existsDir(dirPath) {
-  try {
-    return fs.statSync(dirPath).isDirectory();
-  } catch (_error) {
-    return false;
-  }
-}
+
 
 function getBrainRoot() {
   return path.join(os.homedir(), ".gemini", "antigravity", "brain");

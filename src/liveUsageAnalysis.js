@@ -1,15 +1,8 @@
 "use strict";
 
-function toPositiveInteger(value) {
-  if (value == null || value === "") {
-    return 0;
-  }
-  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return 0;
-  }
-  return parsed;
-}
+const { toPositiveInteger } = require("./utils");
+
+
 
 function analyzeLiveUsage(snapshot) {
   const liveUsage = snapshot && snapshot.liveLatestGeneration && snapshot.liveLatestGeneration.usage
@@ -31,6 +24,7 @@ function analyzeLiveUsage(snapshot) {
       cachedInputTokens: 0,
       uncachedInputTokens: 0,
       outputTokens: 0,
+      approximateNewTokensThisTurn: 0,
       hiddenContextLikely: false
     };
   }
@@ -42,6 +36,7 @@ function analyzeLiveUsage(snapshot) {
     + toPositiveInteger(liveUsage.cacheCreationInputTokens);
   const uncachedInputTokens = toPositiveInteger(liveUsage.uncachedInputTokens);
   const outputTokens = toPositiveInteger(liveUsage.outputTokens);
+  const toolUsePromptTokens = toPositiveInteger(liveUsage.toolUsePromptTokenCount);
   const unexplainedRetainedTokens = Math.max(0, retainedTokens - decodedRecentStepTokens);
   const decodedCoverageFraction = retainedTokens > 0
     ? Math.min(1, decodedRecentStepTokens / retainedTokens)
@@ -54,6 +49,7 @@ function analyzeLiveUsage(snapshot) {
     cachedInputTokens,
     uncachedInputTokens,
     outputTokens,
+    approximateNewTokensThisTurn: uncachedInputTokens + outputTokens + toolUsePromptTokens,
     hiddenContextLikely:
       retainedTokens > 0
       && unexplainedRetainedTokens >= 8192

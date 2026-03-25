@@ -4,17 +4,55 @@ const { EventEmitter } = require("events");
 const path = require("path");
 const { resolveActiveBrainTarget, getBrainRoot } = require("./antigravityLocator");
 const { buildArtifactRegistry } = require("./artifactRegistry");
+const { beginCacheGeneration, sweepCache } = require("./tokenizer");
 const { getConversationFileInfo } = require("./antigravityState");
 const { getConfiguredProfiles, getActiveModelId, getProfileById } = require("./modelCatalog");
 const { resolveBudget, computeUsage } = require("./budget");
 const { AntigravitySdkBridge } = require("./antigravitySdkBridge");
+const { parseTimestamp } = require("./utils");
 
-function parseTimestamp(value) {
-  if (!value) {
-    return 0;
+function normalizeRefreshDetail(value) {
+  return value === "light" || value === "full" ? value : "auto";
+}
+
+function shouldDoFullRefresh(lastFullRefreshAt, intervalMs, now = Date.now()) {
+  if (!lastFullRefreshAt) {
+    return true;
   }
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (typeof intervalMs !== "number" || intervalMs <= 0) {
+    return true;
+  }
+  return now - lastFullRefreshAt >= intervalMs;
+}
+
+function chooseRefreshDetail(config, requestedDetail, snapshot) {
+  const normalized = normalizeRefreshDetail(requestedDetail);
+  if (normalized === "full" || normalized === "light") {
+    return normalized;
+  }
+  const fullRefreshIntervalMs = Math.max(5000, config.get("fullRefreshIntervalMs", 60000));
+  return shouldDoFullRefresh(snapshot && snapshot.lastFullRefreshAt, fullRefreshIntervalMs)
+    ? "full"
+    : "light";
+}
+
+function reusePreviousLiveData(previousSnapshot, sessionId, liveState) {
+  const previous = previousSnapshot || null;
+  if (!previous || !previous.sessionId || previous.sessionId !== sessionId) {
+    return {
+      latestGeneration: liveState.latestGeneration || null,
+      recentSteps: liveState.recentSteps || [],
+      activeSummary: liveState.activeSummary || null
+    };
+  }
+
+  return {
+    latestGeneration: liveState.latestGeneration || previous.liveLatestGeneration || null,
+    recentSteps: (liveState.recentSteps && liveState.recentSteps.length > 0)
+      ? liveState.recentSteps
+      : (previous.liveRecentSteps || []),
+    activeSummary: liveState.activeSummary || previous.activeTrajectorySummary || null
+  };
 }
 
 function buildLiveSummaryEntries(sessionId, recentSteps) {
@@ -89,17 +127,24 @@ class ContextTracker extends EventEmitter {
       detectedModelLabel: "",
       detectedModelPlaceholder: "",
       liveLatestGeneration: null,
+      liveDetailLevel: "full",
       liveRecentSteps: [],
       activeTrajectorySummary: null,
       activeTrajectoryTitle: "",
       liveSelectionSource: "",
       diagnosticsActiveSession: null,
-      activeTabSelection: null
+      activeTabSelection: null,
+      lastFullRefreshAt: 0
     };
   }
 
-  async buildSnapshot() {
+  // TODO: Convert synchronous file I/O (statSync, readdirSync, readFileSync) in
+  // artifactRegistry, antigravityLocator, and antigravityState to async equivalents
+  // to avoid blocking the extension host thread during the 3s polling cycle.
+  async buildSnapshot(options = {}) {
     const config = this.getConfiguration();
+    const previousSnapshot = this.snapshot || this.buildEmptySnapshot();
+    const detailLevel = chooseRefreshDetail(config, options.detailLevel, previousSnapshot);
     const profiles = getConfiguredProfiles(config);
     const activeModelId = getActiveModelId(config, profiles);
     const activeProfile = getProfileById(profiles, activeModelId);
@@ -115,12 +160,13 @@ class ContextTracker extends EventEmitter {
       error: ""
     };
     try {
-      liveState = await this.sdkBridge.refresh(workspaceFolders, preferredCascadeId);
+      liveState = await this.sdkBridge.refresh(workspaceFolders, preferredCascadeId, { detailLevel });
     } catch (error) {
       liveState = {
         ready: false,
         connection: this.sdkBridge.connection,
-        error: error && error.message ? error.message : String(error)
+        error: error && error.message ? error.message : String(error),
+        detailLevel
       };
     }
 
@@ -155,8 +201,9 @@ class ContextTracker extends EventEmitter {
       ...entry,
       includedInHandoff: true
     }));
-    const liveSummaryEntries = buildLiveSummaryEntries(sessionId, liveState.recentSteps || []);
-    const latestGeneration = liveState.latestGeneration || null;
+    const reusedLiveData = reusePreviousLiveData(previousSnapshot, sessionId, liveState);
+    const liveSummaryEntries = buildLiveSummaryEntries(sessionId, reusedLiveData.recentSteps || []);
+    const latestGeneration = reusedLiveData.latestGeneration || null;
     const liveUsage = latestGeneration && latestGeneration.usage && latestGeneration.usage.retainedTokens > 0
       ? latestGeneration.usage
       : null;
@@ -168,9 +215,9 @@ class ContextTracker extends EventEmitter {
       sessionPrefix ? entry.path.startsWith(sessionPrefix) : false
     ).length;
     const liveUpdatedAt = Math.max(
-      parseTimestamp(liveState.activeSummary && liveState.activeSummary.lastModifiedTime),
+      parseTimestamp(reusedLiveData.activeSummary && reusedLiveData.activeSummary.lastModifiedTime),
       parseTimestamp(liveState.diagnosticsActiveSession && liveState.diagnosticsActiveSession.lastModifiedTime),
-      ...((liveState.recentSteps || []).map((step) => parseTimestamp(step.createdAt)))
+      ...((reusedLiveData.recentSteps || []).map((step) => parseTimestamp(step.createdAt)))
     );
     const lastUpdatedAt = Math.max(
       registry.lastUpdatedAt || 0,
@@ -212,13 +259,14 @@ class ContextTracker extends EventEmitter {
       detectedModelLabel,
       detectedModelPlaceholder: latestGeneration ? latestGeneration.modelPlaceholder || "" : "",
       liveLatestGeneration: latestGeneration,
-      liveRecentSteps: liveState.recentSteps || [],
-      activeTrajectorySummary: liveState.activeSummary || null,
+      liveDetailLevel: liveState.detailLevel || detailLevel,
+      liveRecentSteps: reusedLiveData.recentSteps || [],
+      activeTrajectorySummary: reusedLiveData.activeSummary || null,
       activeTrajectoryTitle:
-        (liveState.activeSummary && (
-          liveState.activeSummary.title
-          || liveState.activeSummary.trajectoryMetadata?.title
-          || liveState.activeSummary.chatTitle
+        (reusedLiveData.activeSummary && (
+          reusedLiveData.activeSummary.title
+          || reusedLiveData.activeSummary.trajectoryMetadata?.title
+          || reusedLiveData.activeSummary.chatTitle
         ))
         || (liveState.diagnosticsActiveSession && liveState.diagnosticsActiveSession.title)
         || "",
@@ -226,7 +274,8 @@ class ContextTracker extends EventEmitter {
       liveSelectionSource: liveState.selectionSource || "",
       diagnosticsActiveSession: liveState.diagnosticsActiveSession || null,
       diagnosticsRecentTrajectories: liveState.diagnosticsRecentTrajectories || [],
-      activeTabSelection: liveState.activeTabSelection || null
+      activeTabSelection: liveState.activeTabSelection || null,
+      lastFullRefreshAt: detailLevel === "full" ? Date.now() : (previousSnapshot.lastFullRefreshAt || 0)
     };
   }
 
@@ -248,17 +297,19 @@ class ContextTracker extends EventEmitter {
           generationCount: snapshot.liveLatestGeneration.generationCount
         }
         : null,
-      lastUpdatedAt: snapshot.lastUpdatedAt
+      lastUpdatedAt: snapshot.lastUpdatedAt,
+      liveDetailLevel: snapshot.liveDetailLevel
     });
   }
 
-  async refresh() {
+  async refresh(options = {}) {
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
 
     this.refreshPromise = (async () => {
-      const nextSnapshot = await this.buildSnapshot();
+      beginCacheGeneration();
+      const nextSnapshot = await this.buildSnapshot(options);
       const nextSignature = this.computeSignature(nextSnapshot);
       this.snapshot = nextSnapshot;
       if (nextSignature !== this.signature) {
@@ -272,6 +323,8 @@ class ContextTracker extends EventEmitter {
         throw error;
       })
       .finally(() => {
+        // Sweep stale cache entries even on failure so memory stays bounded.
+        sweepCache();
         this.refreshPromise = null;
       });
 
@@ -284,9 +337,9 @@ class ContextTracker extends EventEmitter {
     }
     const config = this.getConfiguration();
     const refreshIntervalMs = Math.max(1000, config.get("refreshIntervalMs", 3000));
-    void this.refresh();
+    void this.refresh({ detailLevel: "auto" });
     this.interval = setInterval(() => {
-      void this.refresh().catch((error) => {
+      void this.refresh({ detailLevel: "auto" }).catch((error) => {
         console.error("[contextWatcher] refresh failed", error);
       });
     }, refreshIntervalMs);
@@ -306,5 +359,9 @@ class ContextTracker extends EventEmitter {
 
 module.exports = {
   ContextTracker,
-  buildLiveSummaryEntries
+  buildLiveSummaryEntries,
+  chooseRefreshDetail,
+  normalizeRefreshDetail,
+  reusePreviousLiveData,
+  shouldDoFullRefresh
 };

@@ -26,6 +26,7 @@ test("analyzeLiveUsage detects a large retained payload beyond decoded live step
 
   assert.equal(analysis.decodedRecentStepTokens, 57);
   assert.equal(analysis.unexplainedRetainedTokens, 42352);
+  assert.equal(analysis.approximateNewTokensThisTurn, 42409);
   assert.equal(analysis.hiddenContextLikely, true);
 });
 
@@ -60,5 +61,6 @@ test("analyzeLiveUsage reports cache-backed retained input when present", () => 
   assert.equal(analysis.cachedInputTokens, 40535);
   assert.equal(analysis.decodedRecentStepTokens, 4181);
   assert.equal(analysis.unexplainedRetainedTokens, 43057);
+  assert.equal(analysis.approximateNewTokensThisTurn, 6703);
   assert.equal(analysis.hiddenContextLikely, true);
 });

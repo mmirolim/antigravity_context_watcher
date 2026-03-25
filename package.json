@@ -2,7 +2,7 @@
   "name": "antigravity-context-watcher",
   "displayName": "Antigravity Context Watcher",
   "description": "Estimate retained Antigravity context for a selected model, inspect Antigravity state, and copy handoff prompts.",
-  "version": "0.0.9",
+  "version": "0.1.2",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"
@@ -94,6 +94,11 @@
           "default": "",
           "description": "Optional absolute path to a specific Antigravity brain session directory."
         },
+        "contextWatcher.autoPinVisibleSession": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically pin Context Watcher to the visible Antigravity chat when you switch to a different chat record or conversation tab."
+        },
         "contextWatcher.modelProfiles": {
           "type": "array",
           "default": [],
@@ -178,9 +183,15 @@
         },
         "contextWatcher.refreshIntervalMs": {
           "type": "number",
-          "default": 3000,
+          "default": 15000,
           "minimum": 1000,
-          "description": "Polling interval for refreshing the estimate."
+          "description": "Polling interval for lightweight automatic refreshes."
+        },
+        "contextWatcher.fullRefreshIntervalMs": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 5000,
+          "description": "How often automatic polling should perform a full live refresh instead of a lightweight refresh."
         }
       }
     }

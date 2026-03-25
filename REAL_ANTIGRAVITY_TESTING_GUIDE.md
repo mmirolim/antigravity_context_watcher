@@ -187,13 +187,15 @@ Useful settings to know:
 - `contextWatcher.extraWatchPaths`
 - `contextWatcher.compactorTokenLimit`
 - `contextWatcher.refreshIntervalMs`
+- `contextWatcher.fullRefreshIntervalMs`
 
 Recommended initial settings:
 
 ```json
 {
   "contextWatcher.includeBrainArtifactsInEstimate": true,
-  "contextWatcher.refreshIntervalMs": 3000
+  "contextWatcher.refreshIntervalMs": 15000,
+  "contextWatcher.fullRefreshIntervalMs": 60000
 }
 ```
 

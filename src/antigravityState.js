@@ -3,6 +3,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { existsFile, existsDir } = require("./utils");
 
 const WORKSPACE_STATE_KEYS = [
   "memento/workbench.parts.editor",
@@ -16,21 +17,7 @@ const WORKSPACE_KEY_WEIGHTS = {
   "history.entries": 20
 };
 
-function existsFile(targetPath) {
-  try {
-    return fs.statSync(targetPath).isFile();
-  } catch (_error) {
-    return false;
-  }
-}
 
-function existsDir(targetPath) {
-  try {
-    return fs.statSync(targetPath).isDirectory();
-  } catch (_error) {
-    return false;
-  }
-}
 
 function getApplicationSupportRoot() {
   return path.join(os.homedir(), "Library", "Application Support", "Antigravity", "User");

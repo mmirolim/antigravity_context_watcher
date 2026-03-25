@@ -3,23 +3,9 @@
 const fs = require("fs");
 const path = require("path");
 const { readTrackedFile } = require("./tokenizer");
+const { existsPath, safeStat } = require("./utils");
 
-function existsPath(targetPath) {
-  try {
-    fs.accessSync(targetPath);
-    return true;
-  } catch (_error) {
-    return false;
-  }
-}
 
-function safeStat(targetPath) {
-  try {
-    return fs.statSync(targetPath);
-  } catch (_error) {
-    return null;
-  }
-}
 
 function walkFiles(startPath, onFile) {
   const stack = [startPath];
