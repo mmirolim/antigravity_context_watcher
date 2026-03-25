@@ -4,13 +4,6 @@ const fs = require("fs");
 const path = require("path");
 const { readTrackedFile } = require("./tokenizer");
 
-const BRAIN_OPTIONAL_FILES = new Set([
-  "analysis_report.md",
-  "task.md",
-  "implementation_plan.md",
-  "walkthrough.md"
-]);
-
 function existsPath(targetPath) {
   try {
     fs.accessSync(targetPath);
@@ -89,6 +82,26 @@ function addEntry(result, seen, filePath, category, includeInEstimate) {
   result.entries.push(entry);
 }
 
+function isBrainArtifactPath(brainDir, filePath, entryName) {
+  const relativePath = path.relative(brainDir, filePath);
+  if (!relativePath || relativePath.startsWith("..")) {
+    return false;
+  }
+  if (relativePath.includes(`${path.sep}.tempmediaStorage${path.sep}`)) {
+    return false;
+  }
+  if (relativePath.endsWith(".metadata.json")) {
+    return false;
+  }
+  if (relativePath.endsWith(".resolved") || relativePath.includes(".resolved.")) {
+    return false;
+  }
+  if (relativePath.includes(`${path.sep}.system_generated${path.sep}`)) {
+    return false;
+  }
+  return entryName.endsWith(".md") || entryName.endsWith(".txt");
+}
+
 function addBrainEntries(result, seen, brainDir, includeBrainArtifacts) {
   if (!brainDir || !existsPath(brainDir)) {
     return;
@@ -99,7 +112,7 @@ function addBrainEntries(result, seen, brainDir, includeBrainArtifacts) {
       addEntry(result, seen, filePath, "stepOutput", true);
       return;
     }
-    if (includeBrainArtifacts && BRAIN_OPTIONAL_FILES.has(entry.name)) {
+    if (includeBrainArtifacts && isBrainArtifactPath(brainDir, filePath, entry.name)) {
       addEntry(result, seen, filePath, "brainArtifact", true);
     }
   });

@@ -121,29 +121,22 @@ function mergeProfile(base, override) {
   return merged;
 }
 
-function getConfiguredProfiles(config) {
-  const profiles = clone(DEFAULT_PROFILES);
-  const overrides = config.get("modelProfiles", []);
-  if (!Array.isArray(overrides)) {
-    return profiles;
+function applyOverrideMap(byId, overrideMap) {
+  if (!isObject(overrideMap)) {
+    return;
   }
 
-  const byId = new Map();
-  for (const profile of profiles) {
-    byId.set(profile.id, profile);
-  }
-
-  for (const override of overrides) {
-    if (!isObject(override) || typeof override.id !== "string" || !override.id) {
+  for (const [id, override] of Object.entries(overrideMap)) {
+    if (!isObject(override) || !id) {
       continue;
     }
-    if (byId.has(override.id)) {
-      byId.set(override.id, mergeProfile(byId.get(override.id), override));
+    if (byId.has(id)) {
+      byId.set(id, mergeProfile(byId.get(id), Object.assign({ id }, override)));
       continue;
     }
-    byId.set(override.id, mergeProfile({
-      id: override.id,
-      label: override.id,
+    byId.set(id, mergeProfile({
+      id,
+      label: id,
       provider: "custom",
       budgetMode: override.budgetMode === "separate" ? "separate" : "combined",
       providerMaxContextTokens: undefined,
@@ -153,8 +146,44 @@ function getConfiguredProfiles(config) {
       effectiveMaxInputTokens: undefined,
       effectiveMaxOutputTokens: 0,
       reservedOutputTokens: 0
-    }, override));
+    }, Object.assign({ id }, override)));
   }
+}
+
+function getConfiguredProfiles(config) {
+  const profiles = clone(DEFAULT_PROFILES);
+  const overrides = config.get("modelProfiles", []);
+  const byId = new Map();
+  for (const profile of profiles) {
+    byId.set(profile.id, profile);
+  }
+
+  if (Array.isArray(overrides)) {
+    for (const override of overrides) {
+      if (!isObject(override) || typeof override.id !== "string" || !override.id) {
+        continue;
+      }
+      if (byId.has(override.id)) {
+        byId.set(override.id, mergeProfile(byId.get(override.id), override));
+        continue;
+      }
+      byId.set(override.id, mergeProfile({
+        id: override.id,
+        label: override.id,
+        provider: "custom",
+        budgetMode: override.budgetMode === "separate" ? "separate" : "combined",
+        providerMaxContextTokens: undefined,
+        providerMaxInputTokens: undefined,
+        providerMaxOutputTokens: 0,
+        effectiveContextTokens: undefined,
+        effectiveMaxInputTokens: undefined,
+        effectiveMaxOutputTokens: 0,
+        reservedOutputTokens: 0
+      }, override));
+    }
+  }
+
+  applyOverrideMap(byId, config.get("modelBudgetOverrides", {}));
 
   return Array.from(byId.values());
 }
@@ -171,7 +200,30 @@ function getProfileById(profiles, id) {
   return profiles.find((profile) => profile.id === id) || null;
 }
 
+function buildModelBudgetOverrideTemplate(profiles) {
+  const template = {};
+  for (const profile of profiles || []) {
+    if (!profile || !profile.id) {
+      continue;
+    }
+    if (profile.budgetMode === "separate") {
+      template[profile.id] = {
+        effectiveMaxInputTokens: profile.effectiveMaxInputTokens,
+        effectiveMaxOutputTokens: profile.effectiveMaxOutputTokens
+      };
+      continue;
+    }
+    template[profile.id] = {
+      effectiveContextTokens: profile.effectiveContextTokens,
+      effectiveMaxOutputTokens: profile.effectiveMaxOutputTokens,
+      reservedOutputTokens: profile.reservedOutputTokens
+    };
+  }
+  return template;
+}
+
 module.exports = {
+  buildModelBudgetOverrideTemplate,
   DEFAULT_PROFILES,
   getConfiguredProfiles,
   getActiveModelId,

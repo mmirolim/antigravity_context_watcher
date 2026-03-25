@@ -49,6 +49,7 @@ test("buildArtifactRegistry can include optional brain artifacts", () => {
   fs.mkdirSync(brainDir, { recursive: true });
   fs.writeFileSync(path.join(brainDir, "analysis_report.md"), "analysis doc");
   fs.writeFileSync(path.join(brainDir, "implementation_plan.md"), "plan doc");
+  fs.writeFileSync(path.join(brainDir, "code_review.md"), "review doc");
 
   const registry = buildArtifactRegistry({
     brainDir,
@@ -59,4 +60,5 @@ test("buildArtifactRegistry can include optional brain artifacts", () => {
 
   assert.equal(registry.entries.some((entry) => entry.path.endsWith("analysis_report.md")), true);
   assert.equal(registry.entries.some((entry) => entry.path.endsWith("implementation_plan.md")), true);
+  assert.equal(registry.entries.some((entry) => entry.path.endsWith("code_review.md")), true);
 });

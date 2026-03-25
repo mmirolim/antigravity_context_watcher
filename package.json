@@ -1,8 +1,8 @@
 {
   "name": "antigravity-context-watcher",
   "displayName": "Antigravity Context Watcher",
-  "description": "Estimate retained Antigravity context for a selected model and copy a new-chat handoff prompt.",
-  "version": "0.0.1",
+  "description": "Estimate retained Antigravity context for a selected model, inspect Antigravity state, and copy handoff prompts.",
+  "version": "0.0.9",
   "publisher": "local",
   "engines": {
     "vscode": "^1.85.0"
@@ -13,9 +13,15 @@
   "activationEvents": [
     "onStartupFinished",
     "onCommand:contextWatcher.showBreakdown",
+    "onCommand:contextWatcher.showActions",
     "onCommand:contextWatcher.refresh",
     "onCommand:contextWatcher.pickModelProfile",
+    "onCommand:contextWatcher.copyModelBudgetOverrideTemplate",
+    "onCommand:contextWatcher.pickActiveSession",
+    "onCommand:contextWatcher.clearPinnedSession",
     "onCommand:contextWatcher.copyCompactPrompt",
+    "onCommand:contextWatcher.copySummarizeCurrentChatPrompt",
+    "onCommand:contextWatcher.showDiagnostics",
     "onCommand:contextWatcher.openSettings"
   ],
   "main": "./src/extension.js",
@@ -26,6 +32,10 @@
         "title": "Context Watcher: Show Breakdown"
       },
       {
+        "command": "contextWatcher.showActions",
+        "title": "Context Watcher: Show Actions"
+      },
+      {
         "command": "contextWatcher.refresh",
         "title": "Context Watcher: Refresh"
       },
@@ -34,8 +44,28 @@
         "title": "Context Watcher: Pick Model Profile"
       },
       {
+        "command": "contextWatcher.copyModelBudgetOverrideTemplate",
+        "title": "Context Watcher: Copy Model Budget Override Template"
+      },
+      {
+        "command": "contextWatcher.pickActiveSession",
+        "title": "Context Watcher: Pick Active Session"
+      },
+      {
+        "command": "contextWatcher.clearPinnedSession",
+        "title": "Context Watcher: Clear Pinned Session"
+      },
+      {
         "command": "contextWatcher.copyCompactPrompt",
-        "title": "Context Watcher: Copy New Chat Summary"
+        "title": "Context Watcher: Copy New Chat Handoff"
+      },
+      {
+        "command": "contextWatcher.copySummarizeCurrentChatPrompt",
+        "title": "Context Watcher: Copy Summarize Current Chat Prompt"
+      },
+      {
+        "command": "contextWatcher.showDiagnostics",
+        "title": "Context Watcher: Show Diagnostics"
       },
       {
         "command": "contextWatcher.openSettings",
@@ -68,6 +98,44 @@
           "type": "array",
           "default": [],
           "description": "Optional model profile overrides. Objects are matched by id."
+        },
+        "contextWatcher.modelBudgetOverrides": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Manual effective budget overrides keyed by model id. Use this when Antigravity's practical context limit is lower than the provider maximum.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "budgetMode": {
+                "type": "string",
+                "enum": [
+                  "separate",
+                  "combined"
+                ],
+                "description": "Optional override if this model should use separate or combined budgeting."
+              },
+              "effectiveContextTokens": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Effective shared context window for combined-budget models."
+              },
+              "effectiveMaxInputTokens": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Effective max input tokens for separate-budget models."
+              },
+              "effectiveMaxOutputTokens": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Effective max output tokens used by the watcher."
+              },
+              "reservedOutputTokens": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Reserved output allowance for combined-budget models."
+              }
+            }
+          }
         },
         "contextWatcher.warningThreshold": {
           "type": "number",
@@ -119,5 +187,8 @@
   },
   "scripts": {
     "test": "node --test"
+  },
+  "dependencies": {
+    "antigravity-sdk": "^1.7.0"
   }
 }

@@ -1,6 +1,6 @@
 # Antigravity Context Watcher Extension
 
-A VS Code extension for Antigravity IDE focused on one core job first: track retained context for one chosen model in the current Antigravity session, show it clearly, and generate a copy-paste summary prompt for continuing in a new chat.
+A VS Code extension for Antigravity IDE focused on one core job first: track retained context for one chosen model in the current Antigravity session, prefer live Antigravity usage metadata when it is available, show it clearly, and generate a copy-paste summary prompt for continuing in a new chat.
 
 ## Goal
 
@@ -10,7 +10,7 @@ The extension must answer:
 
 1. Which model profile should this conversation be counted against?
 2. What is the effective context budget for that model in this IDE?
-3. How much of that budget is already retained in tracked Antigravity artifacts?
+3. How much of that budget is already retained in the live Antigravity session, or in tracked artifacts when live metadata is unavailable?
 4. When was the estimate last updated?
 5. Can the user copy a ready-to-paste summary prompt to continue in a fresh chat?
 
@@ -22,11 +22,12 @@ Ship in this order:
 
 1. Prompt the user to choose the active model profile on first use.
 2. Track one active Antigravity `brain/` session at a time.
-3. Compute a stable token estimate from watched Antigravity text artifacts only.
-4. Avoid obvious double counting by counting each tracked file once.
-5. Apply model-specific effective budget math correctly.
-6. Show a status bar indicator and a simple detailed breakdown view.
-7. Generate a clipboard-ready summary prompt for starting a new chat.
+3. Use live generator metadata for retained-context totals when Antigravity exposes it.
+4. Fall back to a stable tracked-artifact estimate when live metadata is unavailable.
+5. Avoid obvious double counting by counting each tracked file once in fallback mode.
+6. Apply model-specific effective budget math correctly.
+7. Show a status bar indicator and a simple detailed breakdown view.
+8. Generate a clipboard-ready summary prompt for starting a new chat.
 
 ## Non-Goals For V1
 
@@ -42,21 +43,26 @@ Ship in this order:
 
 ## Core Correctness Decisions
 
-### 1. One Source of Truth For Token Accounting
+### 1. Live Generator Metadata Is Primary When Available
 
 The extension must not sum every file it can find and call that "actual context."
 
-V1 should use a deterministic tracked-artifact registry for the active Antigravity `brain/` directory plus explicitly configured memory/instruction files.
+V1 should resolve token accounting in this order:
 
-The registry is the source of truth for the estimate.
+1. live generator metadata from Antigravity language-server RPC for the active session
+2. deterministic tracked-artifact registry for the active Antigravity `brain/` directory plus explicitly configured memory/instruction files
 
-Default tracked sources:
+Live generator metadata is the source of truth when it is present because a fresh Antigravity chat can already contain large hidden workspace, system, retrieved, or cached context that is not visible in tracked files or decoded chat steps.
+
+The registry remains the source of truth for fallback estimate mode.
+
+Default fallback tracked sources:
 
 - `.system_generated/steps/*/output.txt`
 - current workspace `.agent/**` text files
 - workspace `GEMINI.md` if present
 
-Optional tracked sources:
+Optional fallback tracked sources:
 
 - `task.md`
 - `implementation_plan.md`
@@ -70,7 +76,7 @@ Rules:
 - Exclude metadata files, temp media, binary files, screenshots, and DOM dumps.
 - Show categories separately in the breakdown so the user can see what is contributing to the estimate.
 
-This avoids the most obvious double counting without pretending V1 knows Antigravity's exact assembled prompt.
+This avoids the most obvious double counting in fallback mode without pretending V1 knows Antigravity's full assembled prompt transcript.
 
 ### 2. Assistant Output Must Be Counted, But Only Once
 
@@ -141,17 +147,18 @@ The model-selection UX in V1 should be manual first:
 
 Do not assume the IDE exposes the provider maximum.
 
-### 5. V1 Is Estimate-Only
+### 5. V1 Is Live-First, Estimate Fallback
 
-Because Antigravity does not expose a documented conversation log or streaming API to extensions, V1 should be explicit:
+Because Antigravity does not expose a documented full prompt transcript or streaming API to extensions, V1 should be explicit about its mode:
 
-- the count is an estimate
-- the estimate is based on watched text artifacts
-- the tooltip should state this clearly
+- when live generator metadata is available, the retained-token total comes from Antigravity's live usage data for the current chat
+- when live generator metadata is unavailable, the count is a tracked-artifact estimate
+- neither mode reconstructs the provider-side prompt transcript exactly
+- the tooltip and diagnostics should state the active mode clearly
 
 Do not add a multi-tier confidence system in V1.
 
-If Antigravity later exposes a stable conversation API, exact modes can be added in V2.
+If Antigravity later exposes a stable full prompt or conversation API, richer attribution and transcript views can be added in V2.
 
 ---
 

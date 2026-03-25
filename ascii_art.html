@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASCII ART — Letters Become Images</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0f;
+      color: #00ff88;
+      font-family: 'Share Tech Mono', monospace;
+      overflow-x: hidden;
+    }
+
+    header {
+      text-align: center;
+      padding: 3rem 1rem 1.5rem;
+      background: linear-gradient(180deg, #0d0d1a 0%, transparent 100%);
+    }
+
+    header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(1.4rem, 4vw, 2.6rem);
+      letter-spacing: 0.3em;
+      background: linear-gradient(90deg, #00ff88, #00ccff, #aa44ff, #00ff88);
+      background-size: 300% 100%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: shimmer 4s linear infinite;
+    }
+
+    header p {
+      margin-top: 0.6rem;
+      color: #445566;
+      font-size: 0.85rem;
+      letter-spacing: 0.2em;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 0% 50%; }
+      100% { background-position: 300% 50%; }
+    }
+
+    .gallery {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5rem;
+      padding: 3rem 1rem 6rem;
+    }
+
+    .artwork {
+      text-align: center;
+    }
+
+    .artwork h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.4em;
+      color: #445566;
+      margin-bottom: 1.2rem;
+      text-transform: uppercase;
+    }
+
+    pre {
+      display: inline-block;
+      text-align: left;
+      line-height: 1.15;
+      font-size: clamp(0.38rem, 1.1vw, 0.72rem);
+      white-space: pre;
+      transition: color 0.3s;
+    }
+
+    /* Individual color themes */
+    .art-heart  pre { color: #ff4488; text-shadow: 0 0 8px #ff448866; }
+    .art-star   pre { color: #ffdd00; text-shadow: 0 0 8px #ffdd0066; }
+    .art-wave   pre { color: #00ccff; text-shadow: 0 0 8px #00ccff66; }
+    .art-tree   pre { color: #44ff88; text-shadow: 0 0 8px #44ff8866; }
+    .art-rocket pre { color: #ff8844; text-shadow: 0 0 8px #ff884466; }
+    .art-skull  pre { color: #cc88ff; text-shadow: 0 0 8px #cc88ff66; }
+    .art-moon   pre { color: #88ddff; text-shadow: 0 0 8px #88ddff66; }
+    .art-cat    pre { color: #ffaa44; text-shadow: 0 0 8px #ffaa4466; }
+
+    pre:hover {
+      filter: brightness(1.4) saturate(1.3);
+      cursor: crosshair;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: #223344;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>ASCII ART</h1>
+  <p>where letters become images &nbsp;/&nbsp; ~1000 characters per form</p>
+</header>
+
+<div class="gallery">
+
+  <!-- ❤️ HEART -->
+  <div class="artwork art-heart">
+    <h2>❤ Heart</h2>
+    <pre>
+         LoveLove   LoveLove
+       LoveLoveLove LoveLoveLove
+     LoveLoveLoveLoveLoveLoveLove
+     LoveLoveLoveLoveLoveLoveLove
+     LoveLoveLoveLoveLoveLoveLove
+      LoveLoveLoveLoveLoveLoveLov
+       LoveLoveLoveLoveLoveLoveLo
+        LoveLoveLoveLoveLoveLoveL
+          LoveLoveLoveLoveLoveLov
+            LoveLoveLoveLoveLoveL
+              LoveLoveLoveLoveLov
+                LoveLoveLoveLoveL
+                  LoveLoveLoveLov
+                    LoveLoveLoveL
+                      LoveLoveLov
+                        LoveLoveL
+                          LoveLov
+                            LoveL
+                              Lov
+                               Lo
+                                L
+    </pre>
+  </div>
+
+  <!-- ⭐ STAR -->
+  <div class="artwork art-star">
+    <h2>★ Star</h2>
+    <pre>
+                         S
+                        SSS
+                       SSTAR
+                      SSTARS
+                     SSTARSSS
+                    SSTARSSTAR
+      STARSTARSSTAR SSTARSSTAR STARSTARSSTAR
+       STARSTARSTARSSTARSTARSTARSSTARSTARSTAR
+        STARSTARSSTARSTARSSTARSTARSSTARSTAR
+          TARSTARSSTARSTARSTARSSTARSTARS
+             STARSSTARSTARSTARSSTAR
+            STARSSTARSSTARSTARSSSS
+           STARSTARSSTARSSTARSTAR
+          STARSTARSTARSSTARSTAR
+         STARSTARSSTARSTARSTAR
+        STARSTARSTARSSTARSTAR
+       STARSTARSTARSSTARSTAR
+      STARSTARSSTERSTARSTAR
+       STARSTARSSTARSTARSTAR
+        STARSSTAR    STARS
+    </pre>
+  </div>
+
+  <!-- 🌊 WAVE -->
+  <div class="artwork art-wave">
+    <h2>〰 Wave</h2>
+    <pre>
+  WaveWaveWave                                  WaveWaveWave
+WaveWaveWaveWave                              WaveWaveWaveWave
+WaveWave  WaveWaveWave                  WaveWaveWave  WaveWave
+Wave        WaveWaveWaveWave      WaveWaveWaveWave        Wave
+             WaveWaveWaveWaveWaveWaveWaveWaveWave
+               WaveWaveWaveWaveWaveWaveWaveWave
+                 WaveWaveWave  WaveWaveWave
+                   WaveWave      WaveWave
+
+  WaveWaveWave                                  WaveWaveWave
+WaveWaveWaveWave                              WaveWaveWaveWave
+WaveWave  WaveWaveWave                  WaveWaveWave  WaveWave
+Wave        WaveWaveWaveWave      WaveWaveWaveWave        Wave
+             WaveWaveWaveWaveWaveWaveWaveWaveWave
+               WaveWaveWaveWaveWaveWaveWaveWave
+                 WaveWaveWave  WaveWave
+    </pre>
+  </div>
+
+  <!-- 🌲 TREE -->
+  <div class="artwork art-tree">
+    <h2>🌲 Tree</h2>
+    <pre>
+                      GrowGrow
+                    GrowGrowGrow
+                   GrowGrowGrowG
+                  rowGrowGrowGrow
+                GrowGrowGrowGrowGr
+               owGrowGrowGrowGrowGr
+              owGrowGrowGrowGrowGrow
+            GrowGrowGrowGrowGrowGrowG
+           rowGrowGrowGrowGrowGrowGrow
+          GrowGrowGrowGrowGrowGrowGrowG
+        rowGrowGrowGrowGrowGrowGrowGrowGr
+       owGrowGrowGrowGrowGrowGrowGrowGrowG
+      rowGrowGrowGrowGrowGrowGrowGrowGrowGr
+    owGrowGrowGrowGrowGrowGrowGrowGrowGrowGr
+   owGrowGrowGrowGrowGrowGrowGrowGrowGrowGrow
+                   TrunkTrunk
+                   TrunkTrunk
+                   TrunkTrunk
+                   TrunkTrunk
+    </pre>
+  </div>
+
+  <!-- 🚀 ROCKET -->
+  <div class="artwork art-rocket">
+    <h2>🚀 Rocket</h2>
+    <pre>
+              LaunchLaunch
+           LaunchLaunchLaunch
+         LaunchLaunchLaunchLaun
+        chLaunchLaunchLaunchLaun
+       chLaunchLaunchLaunchLaunCH
+       CHLaunchLaunchLaunchLaunCH
+       CHLaunchLaunchLaunchLaunCH
+        chLaunchLaunchLaunchLaunch
+         LaunchLaunchLaunchLaunch
+          LaunchLaunchLaunchLaun
+       ShootLaunchLaunchShoot
+     ShootShootLaunchShootShoot
+    ShootShootShootShootShootShoo
+     ShootShootShootShootShoot
+      ShootShoot    ShootShoot
+       Shoot          Shoot
+    </pre>
+  </div>
+
+  <!-- 💀 SKULL -->
+  <div class="artwork art-skull">
+    <h2>💀 Skull</h2>
+    <pre>
+         SkullSkullSkullSkull
+      SkullSkullSkullSkullSkullSku
+    llSkullSkullSkullSkullSkullSkull
+   SkullSkullSkullSkullSkullSkullSkul
+   lSkullSkullSkullSkullSkullSkullSku
+   llSkullSkullSkullSkullSkullSkullSk
+   ullSkull          Skull  Skull  SkullSkull
+   SkullSku  Dead  DeadSkullDeadDeadSkullSkull
+   llSkull          Skull  Skull  SkullSku
+   llSkullSkullSkullSkullSkullSkullSk
+   ullSkullSkullSkullSkullSkullSkull
+    SkullSkullSkullSkullSkullSkull
+       SkullSku  Skull  SkullSku
+        llSkull  Skull  llSkull
+          SkullSkullSkullSkull
+    </pre>
+  </div>
+
+  <!-- 🌙 MOON -->
+  <div class="artwork art-moon">
+    <h2>🌙 Moon</h2>
+    <pre>
+            MoonMoonMoon
+         MoonMoonMoonMoonMoon
+       MoonMoonMoonMoon
+      MoonMoonMoon
+     MoonMoonMoon
+     MoonMoonMoon
+     MoonMoonMoon
+     MoonMoonMoon
+      MoonMoonMoon
+       MoonMoonMoonMoon
+         MoonMoonMoonMoonMoon
+            MoonMoonMoon
+    </pre>
+  </div>
+
+  <!-- 🐱 CAT -->
+  <div class="artwork art-cat">
+    <h2>🐱 Cat</h2>
+    <pre>
+   MeowMeow              MeowMeow
+  MeowMeowMeow        MeowMeowMeow
+  MeowMeow Meow      Meow MeowMeow
+   MeowMeowMeowMeowMeowMeowMeow
+    MeowMeowMeowMeowMeowMeowMeow
+    MeowMeowMeowMeowMeowMeowMeow
+     Meow  Meow      Meow  Meow
+     Meow  Meow      Meow  Meow
+    MeowMeowMeowMeowMeowMeowMeow
+     MeowMeow          MeowMeow
+      Meow  MeowMeowMeow  Meow
+     MeowMeowMeowMeowMeowMeow
+   MeowMeow            MeowMeow
+  MeowMeow              MeowMeow
+    </pre>
+  </div>
+
+</div>
+
+<footer>
+  ✦ every pixel is a letter ✦ every letter is a pixel ✦
+</footer>
+
+</body>
+</html>
