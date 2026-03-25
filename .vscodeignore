@@ -1,0 +1,4 @@
+.gitignore
+IDEA.md
+implementation_plan_for_context_watcher.md
+test/**

@@ -1,0 +1,123 @@
+{
+  "name": "antigravity-context-watcher",
+  "displayName": "Antigravity Context Watcher",
+  "description": "Estimate retained Antigravity context for a selected model and copy a new-chat handoff prompt.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:contextWatcher.showBreakdown",
+    "onCommand:contextWatcher.refresh",
+    "onCommand:contextWatcher.pickModelProfile",
+    "onCommand:contextWatcher.copyCompactPrompt",
+    "onCommand:contextWatcher.openSettings"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "contextWatcher.showBreakdown",
+        "title": "Context Watcher: Show Breakdown"
+      },
+      {
+        "command": "contextWatcher.refresh",
+        "title": "Context Watcher: Refresh"
+      },
+      {
+        "command": "contextWatcher.pickModelProfile",
+        "title": "Context Watcher: Pick Model Profile"
+      },
+      {
+        "command": "contextWatcher.copyCompactPrompt",
+        "title": "Context Watcher: Copy New Chat Summary"
+      },
+      {
+        "command": "contextWatcher.openSettings",
+        "title": "Context Watcher: Open Settings"
+      }
+    ],
+    "configuration": {
+      "title": "Antigravity Context Watcher",
+      "properties": {
+        "contextWatcher.modelSelectionMode": {
+          "type": "string",
+          "default": "manual",
+          "enum": [
+            "manual",
+            "autoHint"
+          ],
+          "description": "How the extension should choose the model profile in V1."
+        },
+        "contextWatcher.activeModelId": {
+          "type": "string",
+          "default": "",
+          "description": "The selected model profile id used for counting."
+        },
+        "contextWatcher.activeBrainPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to a specific Antigravity brain session directory."
+        },
+        "contextWatcher.modelProfiles": {
+          "type": "array",
+          "default": [],
+          "description": "Optional model profile overrides. Objects are matched by id."
+        },
+        "contextWatcher.warningThreshold": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Warn when estimated input usage exceeds this fraction."
+        },
+        "contextWatcher.criticalThreshold": {
+          "type": "number",
+          "default": 0.85,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Mark usage as critical when estimated input usage exceeds this fraction."
+        },
+        "contextWatcher.reservedOutputTokens": {
+          "type": "number",
+          "default": 16000,
+          "minimum": 0,
+          "description": "Default output reserve for combined-budget models unless overridden per profile."
+        },
+        "contextWatcher.includeBrainArtifactsInEstimate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to include core Antigravity brain artifacts such as task.md, implementation_plan.md, analysis_report.md, and walkthrough.md in the estimate."
+        },
+        "contextWatcher.compactorTokenLimit": {
+          "type": "number",
+          "default": 24000,
+          "minimum": 1000,
+          "description": "Approximate token budget for the copied new-chat summary prompt."
+        },
+        "contextWatcher.extraWatchPaths": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Extra file or directory paths to include in the estimate."
+        },
+        "contextWatcher.refreshIntervalMs": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 1000,
+          "description": "Polling interval for refreshing the estimate."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
