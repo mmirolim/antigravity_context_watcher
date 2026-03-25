@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   chooseRefreshDetail,
   reusePreviousLiveData,
+  reusePreviousLiveMetadata,
   shouldDoFullRefresh
 } = require("../src/contextTracker");
 
@@ -92,4 +93,30 @@ test("reusePreviousLiveData does not reuse data across different sessions", () =
   assert.equal(reused.latestGeneration, null);
   assert.deepEqual(reused.recentSteps, []);
   assert.equal(reused.activeSummary, null);
+});
+
+test("reusePreviousLiveMetadata preserves model options and connection during light refreshes", () => {
+  const reused = reusePreviousLiveMetadata(
+    {
+      liveReady: true,
+      liveConnection: { port: 1234 },
+      availableModelOptions: [{ label: "Claude Opus 4.6 (Thinking)" }],
+      liveWorkspaceCandidates: [{ cascadeId: "session-1" }],
+      liveSelectionSource: "preferredCascadeId"
+    },
+    {
+      ready: false,
+      detailLevel: "light",
+      connection: null,
+      modelOptions: [],
+      workspaceCandidates: [],
+      selectionSource: ""
+    }
+  );
+
+  assert.equal(reused.liveReady, true);
+  assert.deepEqual(reused.liveConnection, { port: 1234 });
+  assert.deepEqual(reused.modelOptions, [{ label: "Claude Opus 4.6 (Thinking)" }]);
+  assert.deepEqual(reused.workspaceCandidates, [{ cascadeId: "session-1" }]);
+  assert.equal(reused.liveSelectionSource, "preferredCascadeId");
 });

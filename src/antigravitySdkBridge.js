@@ -621,6 +621,46 @@ class AntigravitySdkBridge {
 
   async refresh(workspaceFolders, preferredCascadeId, options = {}) {
     const detailLevel = options.detailLevel === "light" ? "light" : "full";
+    if (detailLevel === "light") {
+      const diagnosticsRecentTrajectories = await getDiagnosticsRecentTrajectories(this.vscode);
+      const diagnosticsActiveSession = diagnosticsRecentTrajectories[0] || null;
+      const activeTabSelection = detectActiveTabSession(this.vscode, {}, diagnosticsRecentTrajectories);
+      let cascadeId = "";
+      let selectionSource = "diagnosticsOnly";
+
+      if (preferredCascadeId) {
+        cascadeId = preferredCascadeId;
+        selectionSource = "preferredCascadeId";
+      } else if (diagnosticsActiveSession && diagnosticsActiveSession.sessionId) {
+        cascadeId = diagnosticsActiveSession.sessionId;
+        selectionSource = "diagnosticsActiveSession";
+      } else if (activeTabSelection && activeTabSelection.sessionId) {
+        cascadeId = activeTabSelection.sessionId;
+        selectionSource = activeTabSelection.source;
+      }
+
+      return {
+        ready: Boolean(this.connection),
+        detailLevel,
+        connection: this.connection,
+        userStatus: {},
+        modelOptions: [],
+        placeholderToLabel: new Map(),
+        trajectorySummaries: {},
+        workspaceCandidates: [],
+        diagnosticsRecentTrajectories,
+        diagnosticsActiveSession,
+        activeTabSelection,
+        selectionSource,
+        cascadeId,
+        activeSummary: null,
+        trajectory: null,
+        generatorMetadata: [],
+        latestGeneration: null,
+        recentSteps: []
+      };
+    }
+
     const bridge = await this.ensureReady(workspaceFolders);
     if (!bridge) {
       return {

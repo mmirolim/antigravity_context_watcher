@@ -677,9 +677,18 @@ async function activate(context) {
       if (!event.affectsConfiguration("contextWatcher")) {
         return;
       }
-      tracker.stop();
-      tracker.start();
-      updateStatusBar(statusBarItem, tracker);
+      const pollingChanged =
+        event.affectsConfiguration("contextWatcher.refreshIntervalMs")
+        || event.affectsConfiguration("contextWatcher.fullRefreshIntervalMs");
+      if (pollingChanged) {
+        tracker.stop();
+        tracker.start();
+      }
+      void tracker.refresh({ detailLevel: pollingChanged ? "auto" : "light" }).then(() => {
+        updateStatusBar(statusBarItem, tracker);
+      }).catch((error) => {
+        console.error("[contextWatcher] configuration refresh failed", error);
+      });
     })
   );
 

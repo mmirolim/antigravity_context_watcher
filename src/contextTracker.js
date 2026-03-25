@@ -30,7 +30,7 @@ function chooseRefreshDetail(config, requestedDetail, snapshot) {
   if (normalized === "full" || normalized === "light") {
     return normalized;
   }
-  const fullRefreshIntervalMs = Math.max(5000, config.get("fullRefreshIntervalMs", 60000));
+  const fullRefreshIntervalMs = Math.max(5000, config.get("fullRefreshIntervalMs", 300000));
   return shouldDoFullRefresh(snapshot && snapshot.lastFullRefreshAt, fullRefreshIntervalMs)
     ? "full"
     : "light";
@@ -52,6 +52,27 @@ function reusePreviousLiveData(previousSnapshot, sessionId, liveState) {
       ? liveState.recentSteps
       : (previous.liveRecentSteps || []),
     activeSummary: liveState.activeSummary || previous.activeTrajectorySummary || null
+  };
+}
+
+function reusePreviousLiveMetadata(previousSnapshot, liveState) {
+  const previous = previousSnapshot || null;
+
+  return {
+    liveReady:
+      typeof liveState.ready === "boolean"
+        ? liveState.ready || Boolean(previous && previous.liveReady && liveState.detailLevel === "light")
+        : Boolean(previous && previous.liveReady),
+    liveConnection: liveState.connection || (previous ? previous.liveConnection : null) || null,
+    modelOptions:
+      Array.isArray(liveState.modelOptions) && liveState.modelOptions.length > 0
+        ? liveState.modelOptions
+        : (previous ? previous.availableModelOptions || [] : []),
+    workspaceCandidates:
+      Array.isArray(liveState.workspaceCandidates) && liveState.workspaceCandidates.length > 0
+        ? liveState.workspaceCandidates
+        : (previous ? previous.liveWorkspaceCandidates || [] : []),
+    liveSelectionSource: liveState.selectionSource || (previous ? previous.liveSelectionSource || "" : "")
   };
 }
 
@@ -202,6 +223,7 @@ class ContextTracker extends EventEmitter {
       includedInHandoff: true
     }));
     const reusedLiveData = reusePreviousLiveData(previousSnapshot, sessionId, liveState);
+    const reusedLiveMetadata = reusePreviousLiveMetadata(previousSnapshot, liveState);
     const liveSummaryEntries = buildLiveSummaryEntries(sessionId, reusedLiveData.recentSteps || []);
     const latestGeneration = reusedLiveData.latestGeneration || null;
     const liveUsage = latestGeneration && latestGeneration.usage && latestGeneration.usage.retainedTokens > 0
@@ -252,10 +274,10 @@ class ContextTracker extends EventEmitter {
       percentUsed: usage.percentUsed,
       remainingInputHeadroom: usage.remainingInputHeadroom,
       usageSource,
-      liveReady: Boolean(liveState.ready),
+      liveReady: reusedLiveMetadata.liveReady,
       liveError: liveState.error || "",
-      liveConnection: liveState.connection || null,
-      availableModelOptions: liveState.modelOptions || [],
+      liveConnection: reusedLiveMetadata.liveConnection,
+      availableModelOptions: reusedLiveMetadata.modelOptions,
       detectedModelLabel,
       detectedModelPlaceholder: latestGeneration ? latestGeneration.modelPlaceholder || "" : "",
       liveLatestGeneration: latestGeneration,
@@ -270,8 +292,8 @@ class ContextTracker extends EventEmitter {
         ))
         || (liveState.diagnosticsActiveSession && liveState.diagnosticsActiveSession.title)
         || "",
-      liveWorkspaceCandidates: liveState.workspaceCandidates || [],
-      liveSelectionSource: liveState.selectionSource || "",
+      liveWorkspaceCandidates: reusedLiveMetadata.workspaceCandidates,
+      liveSelectionSource: reusedLiveMetadata.liveSelectionSource,
       diagnosticsActiveSession: liveState.diagnosticsActiveSession || null,
       diagnosticsRecentTrajectories: liveState.diagnosticsRecentTrajectories || [],
       activeTabSelection: liveState.activeTabSelection || null,
@@ -336,7 +358,7 @@ class ContextTracker extends EventEmitter {
       return;
     }
     const config = this.getConfiguration();
-    const refreshIntervalMs = Math.max(1000, config.get("refreshIntervalMs", 3000));
+    const refreshIntervalMs = Math.max(1000, config.get("refreshIntervalMs", 30000));
     void this.refresh({ detailLevel: "auto" });
     this.interval = setInterval(() => {
       void this.refresh({ detailLevel: "auto" }).catch((error) => {
@@ -363,5 +385,6 @@ module.exports = {
   chooseRefreshDetail,
   normalizeRefreshDetail,
   reusePreviousLiveData,
+  reusePreviousLiveMetadata,
   shouldDoFullRefresh
 };

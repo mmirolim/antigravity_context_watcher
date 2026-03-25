@@ -194,8 +194,8 @@ Recommended initial settings:
 ```json
 {
   "contextWatcher.includeBrainArtifactsInEstimate": true,
-  "contextWatcher.refreshIntervalMs": 15000,
-  "contextWatcher.fullRefreshIntervalMs": 60000
+  "contextWatcher.refreshIntervalMs": 30000,
+  "contextWatcher.fullRefreshIntervalMs": 300000
 }
 ```
 
