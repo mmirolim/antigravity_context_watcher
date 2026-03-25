@@ -661,7 +661,7 @@ async function activate(context) {
 
   context.subscriptions.push({
     dispose() {
-      tracker.stop();
+      void tracker.dispose();
     }
   });
 

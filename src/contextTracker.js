@@ -4,11 +4,11 @@ const { EventEmitter } = require("events");
 const path = require("path");
 const { resolveActiveBrainTarget, getBrainRoot } = require("./antigravityLocator");
 const { buildArtifactRegistry } = require("./artifactRegistry");
-const { beginCacheGeneration, sweepCache } = require("./tokenizer");
 const { getConversationFileInfo } = require("./antigravityState");
 const { getConfiguredProfiles, getActiveModelId, getProfileById } = require("./modelCatalog");
 const { resolveBudget, computeUsage } = require("./budget");
 const { AntigravitySdkBridge } = require("./antigravitySdkBridge");
+const { FilesystemWorkerClient } = require("./filesystemWorkerClient");
 const { parseTimestamp } = require("./utils");
 
 function normalizeRefreshDetail(value) {
@@ -100,6 +100,7 @@ class ContextTracker extends EventEmitter {
     super();
     this.vscode = vscode;
     this.sdkBridge = new AntigravitySdkBridge(vscode);
+    this.filesystemWorker = new FilesystemWorkerClient();
     this.snapshot = this.buildEmptySnapshot();
     this.interval = null;
     this.signature = "";
@@ -159,9 +160,44 @@ class ContextTracker extends EventEmitter {
     };
   }
 
-  // TODO: Convert synchronous file I/O (statSync, readdirSync, readFileSync) in
-  // artifactRegistry, antigravityLocator, and antigravityState to async equivalents
-  // to avoid blocking the extension host thread during the 3s polling cycle.
+  async resolveActiveBrainTargetOffThread(configuredBrainPath, workspaceFolders) {
+    const workspaceFolderPaths = (workspaceFolders || [])
+      .map((folder) => folder && folder.uri && folder.uri.fsPath)
+      .filter(Boolean);
+
+    try {
+      return await this.filesystemWorker.resolveActiveBrainTarget(configuredBrainPath, workspaceFolderPaths);
+    } catch (_error) {
+      return resolveActiveBrainTarget({
+        get(key, fallback) {
+          return key === "activeBrainPath" ? configuredBrainPath : fallback;
+        }
+      }, workspaceFolders);
+    }
+  }
+
+  async buildArtifactRegistryOffThread(brainDir, includeBrainArtifacts, extraWatchPaths, workspaceFolders) {
+    const workspaceFolderPaths = (workspaceFolders || [])
+      .map((folder) => folder && folder.uri && folder.uri.fsPath)
+      .filter(Boolean);
+
+    try {
+      return await this.filesystemWorker.buildArtifactRegistry(
+        brainDir,
+        includeBrainArtifacts,
+        extraWatchPaths,
+        workspaceFolderPaths
+      );
+    } catch (_error) {
+      return buildArtifactRegistry({
+        brainDir,
+        includeBrainArtifacts,
+        extraWatchPaths,
+        workspaceFolders
+      });
+    }
+  }
+
   async buildSnapshot(options = {}) {
     const config = this.getConfiguration();
     const previousSnapshot = this.snapshot || this.buildEmptySnapshot();
@@ -173,23 +209,19 @@ class ContextTracker extends EventEmitter {
     const workspaceFolders = this.getWorkspaceFolders();
     const configuredBrainPath = config.get("activeBrainPath", "");
     const preferredCascadeId = configuredBrainPath ? path.basename(configuredBrainPath) : "";
-    const fallbackTarget = resolveActiveBrainTarget(config, workspaceFolders);
+    const includeBrainArtifacts = config.get("includeBrainArtifactsInEstimate", true);
+    const extraWatchPaths = config.get("extraWatchPaths", []);
+    const fallbackTargetPromise = this.resolveActiveBrainTargetOffThread(configuredBrainPath, workspaceFolders);
 
-    let liveState = {
-      ready: false,
-      connection: null,
-      error: ""
-    };
-    try {
-      liveState = await this.sdkBridge.refresh(workspaceFolders, preferredCascadeId, { detailLevel });
-    } catch (error) {
-      liveState = {
+    const [liveState, fallbackTarget] = await Promise.all([
+      this.sdkBridge.refresh(workspaceFolders, preferredCascadeId, { detailLevel }).catch((error) => ({
         ready: false,
         connection: this.sdkBridge.connection,
         error: error && error.message ? error.message : String(error),
         detailLevel
-      };
-    }
+      })),
+      fallbackTargetPromise
+    ]);
 
     let sessionId = fallbackTarget.sessionId;
     let brainDir = fallbackTarget.brainDir;
@@ -211,12 +243,12 @@ class ContextTracker extends EventEmitter {
       }
     }
 
-    const registry = buildArtifactRegistry({
+    const registry = await this.buildArtifactRegistryOffThread(
       brainDir,
-      workspaceFolders,
-      includeBrainArtifacts: config.get("includeBrainArtifactsInEstimate", true),
-      extraWatchPaths: config.get("extraWatchPaths", [])
-    });
+      includeBrainArtifacts,
+      extraWatchPaths,
+      workspaceFolders
+    );
 
     const artifactEntries = registry.entries.map((entry) => ({
       ...entry,
@@ -330,7 +362,6 @@ class ContextTracker extends EventEmitter {
     }
 
     this.refreshPromise = (async () => {
-      beginCacheGeneration();
       const nextSnapshot = await this.buildSnapshot(options);
       const nextSignature = this.computeSignature(nextSnapshot);
       this.snapshot = nextSnapshot;
@@ -345,8 +376,6 @@ class ContextTracker extends EventEmitter {
         throw error;
       })
       .finally(() => {
-        // Sweep stale cache entries even on failure so memory stays bounded.
-        sweepCache();
         this.refreshPromise = null;
       });
 
@@ -372,6 +401,11 @@ class ContextTracker extends EventEmitter {
       clearInterval(this.interval);
       this.interval = null;
     }
+  }
+
+  async dispose() {
+    this.stop();
+    await this.filesystemWorker.dispose();
   }
 
   getSnapshot() {

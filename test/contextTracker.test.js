@@ -120,3 +120,14 @@ test("reusePreviousLiveMetadata preserves model options and connection during li
   assert.deepEqual(reused.workspaceCandidates, [{ cascadeId: "session-1" }]);
   assert.equal(reused.liveSelectionSource, "preferredCascadeId");
 });
+
+test("chooseRefreshDetail preserves explicit full and light refresh requests", () => {
+  assert.equal(
+    chooseRefreshDetail(config({ fullRefreshIntervalMs: 300000 }), "full", { lastFullRefreshAt: 1 }),
+    "full"
+  );
+  assert.equal(
+    chooseRefreshDetail(config({ fullRefreshIntervalMs: 300000 }), "light", { lastFullRefreshAt: 1 }),
+    "light"
+  );
+});
