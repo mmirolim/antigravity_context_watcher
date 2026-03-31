@@ -6,6 +6,7 @@ const {
   chooseRefreshDetail,
   reusePreviousLiveData,
   reusePreviousLiveMetadata,
+  shouldPromoteRefreshForConversationActivity,
   shouldDoFullRefresh
 } = require("../src/contextTracker");
 
@@ -129,5 +130,62 @@ test("chooseRefreshDetail preserves explicit full and light refresh requests", (
   assert.equal(
     chooseRefreshDetail(config({ fullRefreshIntervalMs: 300000 }), "light", { lastFullRefreshAt: 1 }),
     "light"
+  );
+});
+
+test("shouldPromoteRefreshForConversationActivity returns true when the active conversation file changed", () => {
+  const promoted = shouldPromoteRefreshForConversationActivity(
+    {
+      sessionId: "session-1",
+      conversation: {
+        mtimeMs: 1000
+      }
+    },
+    () => ({
+      path: "/tmp/session-1.pb",
+      exists: true,
+      size: 64,
+      mtimeMs: 2000
+    })
+  );
+
+  assert.equal(promoted, true);
+});
+
+test("shouldPromoteRefreshForConversationActivity ignores unchanged or unknown conversations", () => {
+  assert.equal(
+    shouldPromoteRefreshForConversationActivity(
+      {
+        sessionId: "session-1",
+        conversation: {
+          mtimeMs: 1000
+        }
+      },
+      () => ({
+        path: "/tmp/session-1.pb",
+        exists: true,
+        size: 64,
+        mtimeMs: 1000
+      })
+    ),
+    false
+  );
+
+  assert.equal(
+    shouldPromoteRefreshForConversationActivity(
+      {
+        sessionId: "",
+        conversation: {
+          mtimeMs: 1000
+        }
+      },
+      () => ({
+        path: "/tmp/session-1.pb",
+        exists: true,
+        size: 64,
+        mtimeMs: 2000
+      })
+    ),
+    false
   );
 });

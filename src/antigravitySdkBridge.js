@@ -569,6 +569,8 @@ class AntigravitySdkBridge {
     this.vscode = vscode;
     this.lsBridge = null;
     this.connection = null;
+    this.lastTrajectorySummaries = {};
+    this.lastDiagnosticsRecentTrajectories = [];
   }
 
   async loadLsBridge() {
@@ -622,18 +624,23 @@ class AntigravitySdkBridge {
   async refresh(workspaceFolders, preferredCascadeId, options = {}) {
     const detailLevel = options.detailLevel === "light" ? "light" : "full";
     if (detailLevel === "light") {
-      const diagnosticsRecentTrajectories = await getDiagnosticsRecentTrajectories(this.vscode);
+      const diagnosticsRecentTrajectories = options.enableDiagnostics
+        ? await getDiagnosticsRecentTrajectories(this.vscode)
+        : this.lastDiagnosticsRecentTrajectories;
+      const trajectorySummaries = this.lastTrajectorySummaries;
       const diagnosticsActiveSession = diagnosticsRecentTrajectories[0] || null;
-      const activeTabSelection = detectActiveTabSession(this.vscode, {}, diagnosticsRecentTrajectories);
+      const activeTabSelection = detectActiveTabSession(this.vscode, trajectorySummaries, diagnosticsRecentTrajectories);
       let cascadeId = "";
-      let selectionSource = "diagnosticsOnly";
+      let selectionSource = options.enableDiagnostics ? "diagnosticsOnly" : "cachedSessionState";
 
       if (preferredCascadeId) {
         cascadeId = preferredCascadeId;
         selectionSource = "preferredCascadeId";
       } else if (diagnosticsActiveSession && diagnosticsActiveSession.sessionId) {
         cascadeId = diagnosticsActiveSession.sessionId;
-        selectionSource = "diagnosticsActiveSession";
+        selectionSource = options.enableDiagnostics
+          ? "diagnosticsActiveSession"
+          : "cachedDiagnosticsActiveSession";
       } else if (activeTabSelection && activeTabSelection.sessionId) {
         cascadeId = activeTabSelection.sessionId;
         selectionSource = activeTabSelection.source;
@@ -677,6 +684,8 @@ class AntigravitySdkBridge {
     const diagnosticsRecentTrajectories = await getDiagnosticsRecentTrajectories(this.vscode);
     const diagnosticsActiveSession = diagnosticsRecentTrajectories[0] || null;
     const activeTabSelection = detectActiveTabSession(this.vscode, trajectorySummaries, diagnosticsRecentTrajectories);
+    this.lastTrajectorySummaries = trajectorySummaries;
+    this.lastDiagnosticsRecentTrajectories = diagnosticsRecentTrajectories;
     const modelOptions = buildModelOptionsFromUserStatus(userStatus);
     const placeholderToLabel = buildPlaceholderModelMap(modelOptions);
     const workspaceCandidates = listWorkspaceTrajectoryCandidates(trajectorySummaries, workspaceFolders);
@@ -707,23 +716,57 @@ class AntigravitySdkBridge {
     let trajectory = null;
     let generatorMetadata = [];
     if (cascadeId && detailLevel === "full") {
-      // NOTE: LoadTrajectory may have server-side effects (e.g. loading cached
-      // data into memory). It is called best-effort before the read-only Get*
-      // RPCs because some builds require it to populate the trajectory. If it is
-      // confirmed unnecessary, remove this call to strengthen the read-only
-      // guarantee. See review: "from the name alone it looks stateful."
+      let trajectoryResponse = null;
+      let generatorMetadataResponse = null;
       try {
-        await bridge.rawRPC("LoadTrajectory", { cascadeId });
+        trajectoryResponse = await bridge.rawRPC("GetCascadeTrajectory", { cascadeId });
       } catch (_error) {
-        // Best-effort: some builds may not implement this call, and
-        // GetCascadeTrajectory may work without it.
+        trajectoryResponse = null;
       }
-      const trajectoryResponse = await bridge.rawRPC("GetCascadeTrajectory", { cascadeId });
-      const generatorMetadataResponse = await bridge.rawRPC("GetCascadeTrajectoryGeneratorMetadata", { cascadeId });
-      trajectory = trajectoryResponse.trajectory || null;
-      generatorMetadata = Array.isArray(generatorMetadataResponse.generatorMetadata)
+      try {
+        generatorMetadataResponse = await bridge.rawRPC("GetCascadeTrajectoryGeneratorMetadata", { cascadeId });
+      } catch (_error) {
+        generatorMetadataResponse = null;
+      }
+
+      trajectory = trajectoryResponse && trajectoryResponse.trajectory
+        ? trajectoryResponse.trajectory
+        : null;
+      generatorMetadata = generatorMetadataResponse && Array.isArray(generatorMetadataResponse.generatorMetadata)
         ? generatorMetadataResponse.generatorMetadata
         : [];
+
+      if (!trajectory || generatorMetadata.length === 0) {
+        // LoadTrajectory looks stateful, so only use it as a fallback when the
+        // direct read-only Get* RPCs did not return the needed payload.
+        try {
+          await bridge.rawRPC("LoadTrajectory", { cascadeId });
+        } catch (_error) {
+          // Best-effort: some builds may not implement this call.
+        }
+
+        if (!trajectory) {
+          try {
+            trajectoryResponse = await bridge.rawRPC("GetCascadeTrajectory", { cascadeId });
+            trajectory = trajectoryResponse && trajectoryResponse.trajectory
+              ? trajectoryResponse.trajectory
+              : null;
+          } catch (_error) {
+            trajectory = null;
+          }
+        }
+
+        if (generatorMetadata.length === 0) {
+          try {
+            generatorMetadataResponse = await bridge.rawRPC("GetCascadeTrajectoryGeneratorMetadata", { cascadeId });
+            generatorMetadata = generatorMetadataResponse && Array.isArray(generatorMetadataResponse.generatorMetadata)
+              ? generatorMetadataResponse.generatorMetadata
+              : [];
+          } catch (_error) {
+            generatorMetadata = [];
+          }
+        }
+      }
     }
 
     const latestGeneration = selectLatestGeneratorMetadata(generatorMetadata, placeholderToLabel);

@@ -11,6 +11,7 @@ const { getBrainRoot } = require("./antigravityLocator");
 const { probeRuntimeTraces } = require("./runtimeTraceProbe");
 const { analyzeLiveUsage } = require("./liveUsageAnalysis");
 const { resolveAutoPinBrainPath } = require("./sessionPinning");
+const { extractTabMetadata } = require("./antigravitySdkBridge");
 
 function formatCompactCount(value) {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -92,6 +93,25 @@ function formatRemainingFraction(value) {
     return "";
   }
   return `${Math.round(value * 100)}% remaining`;
+}
+
+function getActiveTabRefreshSignature(vscodeApi) {
+  const activeTab = vscodeApi?.window?.tabGroups?.activeTabGroup?.activeTab || null;
+  if (!activeTab) {
+    return "";
+  }
+
+  const metadata = extractTabMetadata(activeTab);
+  if (!metadata) {
+    return "";
+  }
+
+  return JSON.stringify({
+    viewType: metadata.viewType || "",
+    inputKind: metadata.inputKind || "",
+    sessionIds: metadata.sessionIds || [],
+    label: metadata.sessionIds && metadata.sessionIds.length > 0 ? "" : (metadata.label || "")
+  });
 }
 
 function buildBreakdownMarkdown(snapshot) {
@@ -684,7 +704,10 @@ async function activate(context) {
         tracker.stop();
         tracker.start();
       }
-      void tracker.refresh({ detailLevel: pollingChanged ? "auto" : "light" }).then(() => {
+      void tracker.refresh({
+        detailLevel: pollingChanged ? "auto" : "light",
+        refreshSource: "config"
+      }).then(() => {
         updateStatusBar(statusBarItem, tracker);
       }).catch((error) => {
         console.error("[contextWatcher] configuration refresh failed", error);
@@ -694,13 +717,19 @@ async function activate(context) {
 
   const scheduleRefresh = (() => {
     let timeout = null;
+    let lastVisibleTabSignature = getActiveTabRefreshSignature(vscode);
     return (delayMs = 250) => {
+      const nextSignature = getActiveTabRefreshSignature(vscode);
+      if (nextSignature && nextSignature === lastVisibleTabSignature) {
+        return;
+      }
+      lastVisibleTabSignature = nextSignature;
       if (timeout) {
         clearTimeout(timeout);
       }
       timeout = setTimeout(() => {
         timeout = null;
-        void tracker.refresh({ detailLevel: "light" }).then(() => {
+        void tracker.refresh({ detailLevel: "light", refreshSource: "tabChange" }).then(() => {
           updateStatusBar(statusBarItem, tracker);
           return syncAutoPinVisibleSession("light");
         }).catch((error) => {
@@ -728,7 +757,7 @@ async function activate(context) {
   }
 
   const refreshTracker = async (showMessage, detailLevel = "full") => {
-    await tracker.refresh({ detailLevel });
+    await tracker.refresh({ detailLevel, refreshSource: "manual" });
     await syncAutoPinVisibleSession("light");
     updateStatusBar(statusBarItem, tracker);
     if (showMessage) {

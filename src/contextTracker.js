@@ -36,6 +36,23 @@ function chooseRefreshDetail(config, requestedDetail, snapshot) {
     : "light";
 }
 
+function shouldPromoteRefreshForConversationActivity(previousSnapshot, getConversationInfo = getConversationFileInfo) {
+  const previous = previousSnapshot || null;
+  if (!previous || !previous.sessionId) {
+    return false;
+  }
+
+  const previousConversationMtime = previous.conversation && typeof previous.conversation.mtimeMs === "number"
+    ? previous.conversation.mtimeMs
+    : 0;
+  if (!previousConversationMtime) {
+    return false;
+  }
+
+  const currentConversation = getConversationInfo(previous.sessionId);
+  return Boolean(currentConversation && currentConversation.mtimeMs > previousConversationMtime);
+}
+
 function reusePreviousLiveData(previousSnapshot, sessionId, liveState) {
   const previous = previousSnapshot || null;
   if (!previous || !previous.sessionId || previous.sessionId !== sessionId) {
@@ -201,7 +218,14 @@ class ContextTracker extends EventEmitter {
   async buildSnapshot(options = {}) {
     const config = this.getConfiguration();
     const previousSnapshot = this.snapshot || this.buildEmptySnapshot();
-    const detailLevel = chooseRefreshDetail(config, options.detailLevel, previousSnapshot);
+    let detailLevel = chooseRefreshDetail(config, options.detailLevel, previousSnapshot);
+    if (
+      detailLevel === "light"
+      && options.refreshSource === "poll"
+      && shouldPromoteRefreshForConversationActivity(previousSnapshot)
+    ) {
+      detailLevel = "full";
+    }
     const profiles = getConfiguredProfiles(config);
     const activeModelId = getActiveModelId(config, profiles);
     const activeProfile = getProfileById(profiles, activeModelId);
@@ -214,7 +238,10 @@ class ContextTracker extends EventEmitter {
     const fallbackTargetPromise = this.resolveActiveBrainTargetOffThread(configuredBrainPath, workspaceFolders);
 
     const [liveState, fallbackTarget] = await Promise.all([
-      this.sdkBridge.refresh(workspaceFolders, preferredCascadeId, { detailLevel }).catch((error) => ({
+      this.sdkBridge.refresh(workspaceFolders, preferredCascadeId, {
+        detailLevel,
+        enableDiagnostics: options.refreshSource === "tabChange"
+      }).catch((error) => ({
         ready: false,
         connection: this.sdkBridge.connection,
         error: error && error.message ? error.message : String(error),
@@ -388,9 +415,9 @@ class ContextTracker extends EventEmitter {
     }
     const config = this.getConfiguration();
     const refreshIntervalMs = Math.max(1000, config.get("refreshIntervalMs", 30000));
-    void this.refresh({ detailLevel: "auto" });
+    void this.refresh({ detailLevel: "auto", refreshSource: "poll" });
     this.interval = setInterval(() => {
-      void this.refresh({ detailLevel: "auto" }).catch((error) => {
+      void this.refresh({ detailLevel: "auto", refreshSource: "poll" }).catch((error) => {
         console.error("[contextWatcher] refresh failed", error);
       });
     }, refreshIntervalMs);
@@ -418,6 +445,7 @@ module.exports = {
   buildLiveSummaryEntries,
   chooseRefreshDetail,
   normalizeRefreshDetail,
+  shouldPromoteRefreshForConversationActivity,
   reusePreviousLiveData,
   reusePreviousLiveMetadata,
   shouldDoFullRefresh
